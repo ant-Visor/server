@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>UB · Подключение</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0b1020; color: #edf2ff; }
+    main { width: min(100%, 560px); margin: 0 auto; padding: 30px 18px 44px; }
+    .eyebrow { color: #a7b5d8; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 8px 0; font-size: clamp(30px, 9vw, 44px); letter-spacing: -.05em; }
+    .intro { color: #aab5cc; line-height: 1.55; margin: 0 0 22px; }
+    .card { background: #141c30; border: 1px solid #26334e; border-radius: 18px; padding: 20px; margin-top: 14px; }
+    .card h2 { font-size: 16px; margin: 0 0 14px; }
+    label { display: block; font-size: 13px; color: #b8c4dc; margin: 14px 0 7px; }
+    input { width: 100%; border: 1px solid #394865; background: #0d1425; color: #fff; border-radius: 11px; padding: 13px 14px; font: inherit; outline: none; }
+    input:focus { border-color: #85a9ff; box-shadow: 0 0 0 3px #5785ff24; }
+    button { border: 0; background: #9ab7ff; color: #111a2b; border-radius: 11px; padding: 13px 16px; font: inherit; font-weight: 700; width: 100%; margin-top: 16px; }
+    button:disabled { opacity: .55; }
+    .module { display: flex; gap: 10px; align-items: flex-start; padding: 11px 0; border-bottom: 1px solid #26334e; }
+    .module:last-child { border-bottom: 0; padding-bottom: 0; }
+    .module input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: #9ab7ff; }
+    .module label { margin: 0; flex: 1; }
+    .module small { display: block; color: #8290aa; margin-top: 3px; }
+    .notice { min-height: 22px; color: #bac8e2; line-height: 1.45; margin: 12px 1px 0; white-space: pre-wrap; }
+    .notice.error { color: #ff9d9d; }
+    .notice.ok { color: #9de3b2; }
+    .hint { font-size: 12px; color: #7887a2; line-height: 1.5; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">UB · Server userbot</div>
+    <h1>Подключить аккаунт</h1>
+    <p class="intro">Сессия Telegram будет сохранена в изолированном каталоге и запущена в отдельном worker-контейнере.</p>
+
+    <section class="card" id="registration">
+      <h2>1. Модули</h2>
+      <div id="modules"><div class="hint">Загружаю каталог модулей…</div></div>
+      <label for="phone">Телефон Telegram</label>
+      <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79001234567">
+      <button id="send-code">Запросить код</button>
+      <div id="code-step" hidden>
+        <label for="code">Код из Telegram</label>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Код входа">
+        <button id="submit-code">Продолжить</button>
+      </div>
+      <div id="password-step" hidden>
+        <label for="password">Пароль двухэтапной проверки</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Пароль 2FA">
+        <button id="submit-password">Завершить авторизацию</button>
+      </div>
+      <p class="hint">Код и пароль используются только для авторизации и не записываются в логи.</p>
+      <div class="notice" id="notice" role="status"></div>
+    </section>
+
+    <section class="card" id="status-card" hidden>
+      <h2>Состояние userbot</h2>
+      <div id="status-text" class="notice"></div>
+      <button id="refresh-status">Обновить состояние</button>
+    </section>
+  </main>
+  <script>
+    const tg = window.Telegram?.WebApp;
+    const initData = tg?.initData || "";
+    const notice = document.querySelector("#notice");
+    const sendButton = document.querySelector("#send-code");
+    tg?.ready();
+    tg?.expand();
+
+    function show(message, kind = "") {
+      notice.textContent = message;
+      notice.className = `notice ${kind}`;
+    }
+
+    async function request(path, body) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, init_data: initData }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || "Ошибка запроса");
+      return result;
+    }
+
+    async function loadModules() {
+      if (!initData) {
+        show("Откройте эту страницу из Telegram через кнопку бота.", "error");
+        document.querySelector("#modules").textContent = "Нет подтверждённых данных Telegram";
+        sendButton.disabled = true;
+        return;
+      }
+      try {
+        const response = await fetch("/api/modules", { headers: { "X-Telegram-Init-Data": initData } });
+        const modules = await response.json();
+        if (!response.ok) throw new Error(modules.detail || "Не удалось загрузить каталог");
+        const root = document.querySelector("#modules");
+        root.replaceChildren();
+        for (const module of modules) {
+          const row = document.createElement("div");
+          row.className = "module";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.name = "module";
+          checkbox.value = module.id;
+          checkbox.checked = module.required || module.id === "spaceTW";
+          checkbox.disabled = module.required;
+          const label = document.createElement("label");
+          label.append(document.createTextNode(module.name));
+          const description = document.createElement("small");
+          description.textContent = `${module.description} · v${module.version}`;
+          label.append(description);
+          row.append(checkbox, label);
+          root.append(row);
+        }
+      } catch (error) {
+        show(error.message, "error");
+      }
+    }
+
+    sendButton.addEventListener("click", async () => {
+      sendButton.disabled = true;
+      show("Запрашиваю код…");
+      try {
+        const modules = [...document.querySelectorAll('input[name="module"]:checked')].map(item => item.value);
+        const result = await request("/api/auth/start", { phone: document.querySelector("#phone").value, modules });
+        document.querySelector("#code-step").hidden = false;
+        show(result.message, "ok");
+      } catch (error) {
+        show(error.message, "error");
+        sendButton.disabled = false;
+      }
+    });
+
+    document.querySelector("#submit-code").addEventListener("click", async () => {
+      const button = document.querySelector("#submit-code");
+      button.disabled = true;
+      show("Проверяю код…");
+      try {
+        const result = await request("/api/auth/code", { code: document.querySelector("#code").value });
+        if (result.status === "password_required") {
+          document.querySelector("#password-step").hidden = false;
+          show(result.message);
+          return;
+        }
+        show(`${result.message}. Пользователь: ${result.telegram_user}`, "ok");
+        document.querySelector("#status-card").hidden = false;
+        await refreshStatus();
+      } catch (error) {
+        show(error.message, "error");
+        button.disabled = false;
+      }
+    });
+
+    document.querySelector("#submit-password").addEventListener("click", async () => {
+      const button = document.querySelector("#submit-password");
+      button.disabled = true;
+      show("Проверяю пароль…");
+      try {
+        const result = await request("/api/auth/password", { password: document.querySelector("#password").value });
+        show(`${result.message}. Пользователь: ${result.telegram_user}`, result.status === "error" ? "error" : "ok");
+        document.querySelector("#status-card").hidden = false;
+        await refreshStatus();
+      } catch (error) {
+        show(error.message, "error");
+        button.disabled = false;
+      }
+    });
+
+    async function refreshStatus() {
+      const response = await fetch("/api/status", { headers: { "X-Telegram-Init-Data": initData } });
+      const result = await response.json();
+      document.querySelector("#status-text").textContent =
+        `Control: ${result.status || "unknown"}\nWorker: ${result.worker?.status || "unknown"}\nHealth: ${result.worker?.health || "pending"}\nМодули: ${(result.modules || []).join(", ")}`;
+    }
+
+    document.querySelector("#refresh-status").addEventListener("click", refreshStatus);
+    loadModules();
+  </script>
+</body>
+</html>

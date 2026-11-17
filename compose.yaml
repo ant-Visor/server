@@ -1,0 +1,91 @@
+services:
+  worker-image:
+    image: ${WORKER_IMAGE:-ub-worker:local}
+    build:
+      context: ${SKELETON_DIR:-./skeleton}
+      dockerfile: Dockerfile
+    command: ["python", "-c", "print('UB worker image ready')"]
+    restart: "no"
+
+  web:
+    build:
+      context: .
+      dockerfile: control.Dockerfile
+    env_file: .env
+    environment:
+      USERS_DIR: /srv/ub/users
+      CATALOG_DIR: /opt/ub-module-catalog
+      SERVER_MODULE_ALLOWLIST: ${SERVER_MODULE_ALLOWLIST:-base,spaceTW}
+      ORCHESTRATOR_URL: http://orchestrator:8090
+    volumes:
+      - ./users:/srv/ub/users
+      - ./state:/srv/ub/state
+      - ${MODULES_DIR:-./modules}:/opt/ub-module-catalog:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-S", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  bot:
+    build:
+      context: .
+      dockerfile: control.Dockerfile
+    command: ["python", "-m", "app.bot"]
+    env_file: .env
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    environment:
+      WEBAPP_DOMAIN: ${WEBAPP_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+    restart: unless-stopped
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator.Dockerfile
+    env_file: .env
+    environment:
+      USERS_DIR: /srv/ub/users
+      CATALOG_DIR: /opt/ub-module-catalog
+      SERVER_MODULE_ALLOWLIST: ${SERVER_MODULE_ALLOWLIST:-base,spaceTW}
+    volumes:
+      - ./users:/srv/ub/users
+      - ${MODULES_DIR:-./modules}:/opt/ub-module-catalog:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      worker-image:
+        condition: service_completed_successfully
+    expose:
+      - "8090"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-S", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  caddy_data:
+  caddy_config:

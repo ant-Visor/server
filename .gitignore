@@ -1,0 +1,9 @@
+.env
+.oci-capacity.env
+users/**
+state/**
+/skeleton/
+/modules/
+.venv/
+__pycache__/
+*.py[cod]
