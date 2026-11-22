@@ -124,3 +124,8 @@ docker compose --profile https up -d --build --no-deps web
 ```
 
 После остановки и до запуска отложи в резервную папку оба каталога: "users/" и "state/"
+
+## fuckup
+
+не приходит код, проверка интерактивно в контейнере
+docker compose --profile check-code run --rm --no-deps check-code

@@ -46,9 +46,9 @@ class AuthManager:
   async def start(self, telegram_id: int, phone: str, modules: list[str]) -> dict:
     if not self.settings.api_id or not self.settings.api_hash:
       raise RuntimeError("Server TELEGRAM_API_ID and TELEGRAM_API_HASH are not configured")
-    phone = phone.strip()
-    if not phone.startswith("+") or not phone[1:].isdigit() or not 8 <= len(phone[1:]) <= 15:
-      raise ValueError("Введите номер в международном формате, например +79001234567")
+    phone = phone.strip().removeprefix("+")
+    if not phone.isascii() or not phone.isdecimal() or not 8 <= len(phone) <= 15:
+      raise ValueError("Введите номер с кодом страны, например 380501234567 или +380501234567")
     modules = validate_selection(self.settings.catalog_dir, modules, self.settings.allowed_modules)
     try:
       device_options = device_client_options(self.settings.device_profile)
