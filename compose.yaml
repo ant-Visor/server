@@ -7,6 +7,30 @@ services:
     command: ["python", "-c", "print('UB worker image ready')"]
     restart: "no"
 
+  check-code:
+    profiles: ["check-code"]
+    image: ${WORKER_IMAGE:-ub-worker:local}
+    pull_policy: never
+    working_dir: /tmp
+    command: ["python", "-u", "/opt/check-code/cc.py"]
+    stdin_open: true
+    tty: true
+    restart: "no"
+    healthcheck:
+      disable: true
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+    volumes:
+      - type: bind
+        source: ./check_code/cc.py
+        target: /opt/check-code/cc.py
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:mode=1777
+
   web:
     build:
       context: .

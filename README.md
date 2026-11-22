@@ -38,6 +38,18 @@ Compose builds `ub-worker:local` through a one-shot image-build service, then st
 
 `spaceTW` creates its notification bot through BotFather on the user's account during the first worker start. That token and its state/database are written only under that user's module directory.
 
+## Interactive Telegram login test
+
+From the `server` directory with `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` set in `.env`:
+
+```sh
+docker compose --profile check-code run --rm --no-deps check-code
+```
+
+This runs `check_code/cc.py` in the foreground using the existing worker image (`WORKER_IMAGE`, default `ub-worker:local`). If the image is missing, run `docker compose build worker-image` first. `run` starts only the diagnostic container and attaches the terminal so you can enter the phone number, login code, and 2FA password if prompted. Do not use `-d` or `-T` for this test.
+
+The script is mounted read-only; script changes do not require an image rebuild. Telethon uses an in-memory session and does not write a session file. A successful login may still appear in Telegram's active sessions; revoke the test login there if no longer needed. The test neither launches userbot modules nor uses existing users' sessions. It prints the Telethon version in the worker image, which may differ from the `web` image.
+
 ## Storage and module catalog
 
 ```text
