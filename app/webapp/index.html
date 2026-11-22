@@ -44,7 +44,7 @@
       <div id="modules"><div class="hint">Загружаю каталог модулей…</div></div>
       <label for="phone">Телефон Telegram</label>
       <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79001234567">
-      <button id="send-code">Запросить код</button>
+      <button id="send-code" disabled>Запросить код</button>
       <div id="code-step" hidden>
         <label for="code">Код из Telegram</label>
         <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Код входа">
@@ -78,15 +78,25 @@
       notice.className = `notice ${kind}`;
     }
 
+    async function readResponse(response) {
+      if (response.status >= 500) {
+        throw new Error(`Сервер временно недоступен (HTTP ${response.status}). Попробуйте позже.`);
+      }
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(typeof result?.detail === "string" ? result.detail : `Ошибка запроса (HTTP ${response.status}).`);
+      }
+      if (!result) throw new Error("Сервер вернул пустой или некорректный ответ.");
+      return result;
+    }
+
     async function request(path, body) {
       const response = await fetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...body, init_data: initData }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || "Ошибка запроса");
-      return result;
+      return readResponse(response);
     }
 
     async function loadModules() {
@@ -98,8 +108,7 @@
       }
       try {
         const response = await fetch("/api/modules", { headers: { "X-Telegram-Init-Data": initData } });
-        const modules = await response.json();
-        if (!response.ok) throw new Error(modules.detail || "Не удалось загрузить каталог");
+        const modules = await readResponse(response);
         const root = document.querySelector("#modules");
         root.replaceChildren();
         for (const module of modules) {
@@ -119,7 +128,9 @@
           row.append(checkbox, label);
           root.append(row);
         }
+        sendButton.disabled = false;
       } catch (error) {
+        document.querySelector("#modules").textContent = "Каталог модулей недоступен";
         show(error.message, "error");
       }
     }
@@ -175,12 +186,14 @@
 
     async function refreshStatus() {
       const response = await fetch("/api/status", { headers: { "X-Telegram-Init-Data": initData } });
-      const result = await response.json();
+      const result = await readResponse(response);
       document.querySelector("#status-text").textContent =
         `Control: ${result.status || "unknown"}\nWorker: ${result.worker?.status || "unknown"}\nHealth: ${result.worker?.health || "pending"}\nМодули: ${(result.modules || []).join(", ")}`;
     }
 
-    document.querySelector("#refresh-status").addEventListener("click", refreshStatus);
+    document.querySelector("#refresh-status").addEventListener("click", () => {
+      refreshStatus().catch(error => { document.querySelector("#status-text").textContent = error.message; });
+    });
     loadModules();
   </script>
 </body>
