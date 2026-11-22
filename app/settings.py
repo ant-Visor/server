@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .device_profiles import DEFAULT_DEVICE_PROFILE
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -15,6 +17,7 @@ class Settings:
   control_db: Path
   orchestrator_url: str
   orchestrator_token: str
+  device_profile: str = DEFAULT_DEVICE_PROFILE
 
 
 def load_settings() -> Settings:
@@ -32,4 +35,5 @@ def load_settings() -> Settings:
     control_db=Path(os.getenv("CONTROL_DB", "/srv/ub/state/control.sqlite3")),
     orchestrator_url=os.getenv("ORCHESTRATOR_URL", "http://orchestrator:8090").rstrip("/"),
     orchestrator_token=os.getenv("ORCHESTRATOR_TOKEN", ""),
+    device_profile=os.getenv("TELEGRAM_DEVICE_PROFILE", "").strip() or DEFAULT_DEVICE_PROFILE,
   )

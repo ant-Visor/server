@@ -18,6 +18,7 @@ The local `.env` is ignored by this repository. It already contains the temporar
 Fill these values in `.env`:
 
 - `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`: server-side Telegram application credentials from `my.telegram.org`.
+- `TELEGRAM_DEVICE_PROFILE`: metadata sent by the registration client. Defaults to `iphone_14_pro_max`; use `telethon_default` to compare with Telethon's default device metadata. Profiles live in `app/device_profiles.py`. This does not change the worker or control code delivery.
 - `WEBAPP_URL`: public HTTPS URL serving this Mini App. Telegram Web Apps do not work from a plain HTTP or localhost URL.
 - `WEBAPP_DOMAIN`: DNS name for the optional Caddy TLS profile; set it to the same host as `WEBAPP_URL`.
 - `HOST_USERS_DIR`: absolute path to `server/users` as seen by the Docker daemon. On a Linux host, for example, `/opt/ub/server/users`.

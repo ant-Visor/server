@@ -17,6 +17,7 @@ from telethon.errors import (
 )
 
 from .catalog import validate_selection
+from .device_profiles import device_client_options
 from .orchestrator_client import OrchestratorClient
 from .settings import Settings
 from .storage import UserStore
@@ -49,6 +50,11 @@ class AuthManager:
     if not phone.startswith("+") or not phone[1:].isdigit() or not 8 <= len(phone[1:]) <= 15:
       raise ValueError("Введите номер в международном формате, например +79001234567")
     modules = validate_selection(self.settings.catalog_dir, modules, self.settings.allowed_modules)
+    try:
+      device_options = device_client_options(self.settings.device_profile)
+    except ValueError as exc:
+      logger.error("Invalid server Telegram device profile configuration: %s", exc)
+      raise RuntimeError("Профиль устройства для авторизации не настроен") from None
 
     async with self.lock:
       await self._expire_pending()
@@ -65,7 +71,10 @@ class AuthManager:
       auth_dir.mkdir(parents=True, exist_ok=True)
       for old_file in auth_dir.glob("login.session*"):
         old_file.unlink(missing_ok=True)
-      client = TelegramClient(str(auth_dir / "login"), self.settings.api_id, self.settings.api_hash)
+      client = TelegramClient(
+        str(auth_dir / "login"), self.settings.api_id, self.settings.api_hash,
+        connection_retries=3, **device_options,
+      )
       try:
         await client.connect()
         sent_code = await client.send_code_request(phone)
@@ -85,7 +94,9 @@ class AuthManager:
         expires_at=time.monotonic() + 600,
       )
     delivery = type(sent_code.type).__name__
-    logger.info("Telegram accepted login code request; delivery=%s", delivery)
+    logging.getLogger("uvicorn.error.ub.auth").info(
+      "Telegram accepted login code request; profile=%s delivery=%s", self.settings.device_profile, delivery
+    )
     hints = {
       "SentCodeTypeApp": "Проверьте служебный чат Telegram в приложении, где этот аккаунт уже открыт.",
       "SentCodeTypeSms": "Проверьте SMS на указанном номере.",
