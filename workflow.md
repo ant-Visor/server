@@ -118,6 +118,9 @@ git pull --ff-only
 git -C skeleton pull --ff-only
 git -C modules pull --ff-only
 docker compose --profile https up -d --build
+
+docker compose --profile https up -d --build --no-deps web
+
 ```
 
 После остановки и до запуска отложи в резервную папку оба каталога: "users/" и "state/"
