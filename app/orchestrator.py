@@ -8,6 +8,7 @@ from pathlib import Path
 
 import docker
 from docker.errors import NotFound
+from docker.types import Mount
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
@@ -65,7 +66,8 @@ def prepare_user(telegram_id: int, selected_modules: list[str]) -> Path:
   user_path = users_dir / user_id
   data_dir = user_path / "data"
   modules_dir = user_path / "modules"
-  data_dir.mkdir(parents=True, exist_ok=True)
+  if not all((data_dir / filename).is_file() for filename in ("config.json", "session.session")):
+    raise ValueError("Worker data is missing its configuration or Telegram session")
   modules_dir.mkdir(parents=True, exist_ok=True)
 
   for module_id in validated:
@@ -132,13 +134,14 @@ def start_user(telegram_id: int, request: StartRequest, authorization: str | Non
     environment={
       "PYTHONUNBUFFERED": "1",
       "PYTHONDONTWRITEBYTECODE": "1",
+      "UB_NONINTERACTIVE": "1",
       "UB_REQUIRED_MODULES": ",".join(validated),
       "UB_READY_FILE": "/tmp/ub-ready",
     },
-    volumes={
-      str(host_user_dir / "data"): {"bind": "/app/ub/data", "mode": "rw"},
-      str(host_user_dir / "modules"): {"bind": "/app/ub/modules", "mode": "rw"},
-    },
+    mounts=[
+      Mount(target="/app/ub/data", source=str(host_user_dir / "data"), type="bind"),
+      Mount(target="/app/ub/modules", source=str(host_user_dir / "modules"), type="bind"),
+    ],
     labels={"ub.managed": "true", "ub.telegram_id": str(telegram_id)},
     restart_policy={"Name": "unless-stopped"},
     mem_limit="512m",

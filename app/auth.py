@@ -53,7 +53,8 @@ class AuthManager:
     async with self.lock:
       await self._expire_pending()
       if telegram_id in self.pending:
-        raise ValueError("Код уже запрошен. Введите его или начните авторизацию заново через минуту.")
+        remaining = int(self.pending[telegram_id].expires_at - time.monotonic()) + 1
+        raise ValueError(f"Код уже запрошен. Введите его или повторите запрос через {remaining} сек.")
 
       user_dir = self.settings.users_dir / str(telegram_id)
       final_session = user_dir / "data" / "session.session"
@@ -83,7 +84,18 @@ class AuthManager:
         modules=modules,
         expires_at=time.monotonic() + 600,
       )
-    return {"status": "code_sent", "message": "Код отправлен Telegram"}
+    delivery = type(sent_code.type).__name__
+    logger.info("Telegram accepted login code request; delivery=%s", delivery)
+    hints = {
+      "SentCodeTypeApp": "Проверьте служебный чат Telegram в приложении, где этот аккаунт уже открыт.",
+      "SentCodeTypeSms": "Проверьте SMS на указанном номере.",
+      "SentCodeTypeEmailCode": "Проверьте почту, привязанную к Telegram.",
+      "SentCodeTypeCall": "Ожидайте звонок на указанный номер.",
+    }
+    return {
+      "status": "code_sent",
+      "message": hints.get(delivery, "Telegram принял запрос. Проверьте подсказки в приложении Telegram."),
+    }
 
   async def submit_code(self, telegram_id: int, code: str) -> dict:
     pending = self.pending.get(telegram_id)
